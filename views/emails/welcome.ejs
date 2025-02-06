@@ -1,0 +1,152 @@
+<!-- views/emails/welcome.ejs -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      .container {
+        max-width: 600px;
+        margin: auto;
+        font-family: Arial, sans-serif;
+      }
+      .header {
+        background: linear-gradient(135deg, #4a90e2 0%, #2c5b9c 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+        border-radius: 10px 10px 0 0;
+      }
+      .content {
+        padding: 30px;
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+      }
+      .welcome-image {
+        width: 100%;
+        max-width: 400px;
+        margin: 20px auto;
+        display: block;
+      }
+      .features {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: wrap;
+        margin: 20px 0;
+      }
+      .feature {
+        text-align: center;
+        margin: 10px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        width: calc(33.33% - 40px);
+      }
+      .cta-button {
+        background: #4a90e2;
+        color: white;
+        padding: 15px 30px;
+        text-decoration: none;
+        border-radius: 25px;
+        font-weight: bold;
+        display: inline-block;
+        margin: 20px 0;
+        transition: background 0.3s ease;
+      }
+      .cta-button:hover {
+        background: #357abd;
+      }
+      .social-links {
+        margin: 20px 0;
+        text-align: center;
+      }
+      .social-icon {
+        margin: 0 10px;
+        font-size: 24px;
+        color: #4a90e2;
+        text-decoration: none;
+      }
+      .footer {
+        text-align: center;
+        padding: 20px;
+        background: #f8f9fa;
+        color: #666;
+        border-radius: 0 0 10px 10px;
+      }
+      .special-offer {
+        background: #ffe4e1;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 20px 0;
+        text-align: center;
+        border: 2px dashed #ff6b6b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Welcome to Cycle Store! 🚲</h1>
+        <p>Your Adventure Begins Here</p>
+      </div>
+      <div class="content">
+        <h2>Dear <%= name %>,</h2>
+        <p>
+          Thank you for joining our cycling community! We're thrilled to have
+          you as part of our growing family of cycling enthusiasts.
+        </p>
+
+        <img
+          src="/api/placeholder/400/200"
+          alt="Welcome to Cycle Store"
+          class="welcome-image"
+        />
+
+        <h3>What You Can Explore:</h3>
+        <div class="features">
+          <div class="feature">
+            <h4>🏆 Premium Bikes</h4>
+            <p>Explore our collection of top-quality cycles</p>
+          </div>
+          <div class="feature">
+            <h4>🛠️ Accessories</h4>
+            <p>Complete your riding gear</p>
+          </div>
+          <div class="feature">
+            <h4>👥 Community</h4>
+            <p>Join local riding groups</p>
+          </div>
+        </div>
+
+        <div style="text-align: center">
+          <a href="<%= websiteUrl %>" class="cta-button">Start Shopping Now</a>
+        </div>
+
+        <div class="social-links">
+          <p>Follow us for updates and cycling tips:</p>
+          <a href="<%= socialLinks.facebook %>" class="social-icon">Facebook</a>
+          <a href="<%= socialLinks.instagram %>" class="social-icon"
+            >Instagram</a
+          >
+          <a href="<%= socialLinks.twitter %>" class="social-icon">Twitter</a>
+        </div>
+
+        <p>
+          Need help getting started? Our customer support team is available 24/7
+          to assist you!
+        </p>
+        <p>Happy Cycling! 🚴‍♂️</p>
+
+        <p style="font-style: italic; color: #666">- The Cycle Chala Team</p>
+      </div>
+      <div class="footer">
+        <p>
+          © <%= new Date().getFullYear() %> CycleChala Store. All rights
+          reserved.
+        </p>
+        <small
+          >If you have any questions, contact us at
+          support@cyclestore.com</small
+        >
+      </div>
+    </div>
+  </body>
+</html>

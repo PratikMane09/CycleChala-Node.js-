@@ -1,0 +1,109 @@
+<!-- views/emails/verification.ejs -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      .container {
+        max-width: 600px;
+        margin: auto;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        border-radius: 10px;
+      }
+      .header {
+        background: linear-gradient(135deg, #4a90e2 0%, #2c5b9c 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+        border-radius: 10px 10px 0 0;
+      }
+      .content {
+        padding: 30px;
+        background: #ffffff;
+      }
+      .verification-box {
+        background: #f8f9fa;
+        border: 2px dashed #4a90e2;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+        text-align: center;
+      }
+      .otp-display {
+        font-size: 32px;
+        letter-spacing: 5px;
+        color: #4a90e2;
+        font-weight: bold;
+        margin: 15px 0;
+        background: #fff;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #e0e0e0;
+      }
+      .timer {
+        color: #ff6b6b;
+        font-size: 14px;
+        margin-top: 10px;
+      }
+      .security-notice {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 15px;
+        margin: 20px 0;
+        font-size: 14px;
+      }
+      .footer {
+        text-align: center;
+        padding: 20px;
+        background: #f8f9fa;
+        color: #666;
+        border-radius: 0 0 10px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🔐 Verify Your Email</h1>
+        <p>One Quick Step to Start Your Cycling Journey</p>
+      </div>
+      <div class="content">
+        <h2>Hello <%= name %>,</h2>
+        <p>
+          Thank you for choosing Cycle Store! We're excited to have you join our
+          community of cycling enthusiasts.
+        </p>
+
+        <div class="verification-box">
+          <h3>Your Verification Code</h3>
+          <div class="otp-display"><%= otp %></div>
+          <div class="timer">⏰ Code expires in 10 minutes</div>
+        </div>
+
+        <div class="security-notice">
+          <strong>🔒 Security Notice:</strong>
+          <p>
+            Never share this code with anyone. Our team will never ask for your
+            verification code.
+          </p>
+        </div>
+
+        <p>Once verified, you'll get access to:</p>
+        <ul style="color: #444">
+          <li>Exclusive member discounts</li>
+          <li>Premium cycling gear</li>
+          <li>Expert bike maintenance tips</li>
+          <li>Community events and rides</li>
+        </ul>
+      </div>
+      <div class="footer">
+        <p>
+          © <%= new Date().getFullYear() %> Cycle Store. All rights reserved.
+        </p>
+        <small
+          >Need help? Contact our support team at support@cyclestore.com</small
+        >
+      </div>
+    </div>
+  </body>
+</html>
