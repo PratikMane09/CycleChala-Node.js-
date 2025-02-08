@@ -1,0 +1,111 @@
+<!-- views/emails/order-update.ejs -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      .container {
+        max-width: 600px;
+        margin: auto;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        border-radius: 10px;
+      }
+      .header {
+        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+        border-radius: 10px 10px 0 0;
+      }
+      .content {
+        padding: 30px;
+        background: #ffffff;
+      }
+      .update-box {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 20px;
+        margin: 20px 0;
+        border-radius: 5px;
+      }
+      .address-details {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 15px 0;
+      }
+      .support-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .footer {
+        text-align: center;
+        padding: 20px;
+        background: #f8f9fa;
+        color: #666;
+        border-radius: 0 0 10px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>📝 Order Update</h1>
+        <p>Important Changes to Your Order</p>
+      </div>
+      <div class="content">
+        <h2>Hello <%= name %>,</h2>
+        <p>
+          Your order #<%= orderId %> has been updated with the following
+          changes:
+        </p>
+
+        <div class="update-box">
+          <h3 style="margin-top: 0">🔄 What's Changed</h3>
+          <p><%= updateMessage %></p>
+        </div>
+
+        <% if (shipping) { %>
+        <div class="address-details">
+          <h3>📦 Updated Shipping Address</h3>
+          <p>
+            <%= shipping.address.street %><br />
+            <%= shipping.address.city %>, <%= shipping.address.state %><br />
+            <%= shipping.address.country %> <%= shipping.address.zipCode %>
+          </p>
+        </div>
+        <% } %> <% if (billing) { %>
+        <div class="address-details">
+          <h3>💳 Updated Billing Address</h3>
+          <p>
+            <%= billing.address.street %><br />
+            <%= billing.address.city %>, <%= billing.address.state %><br />
+            <%= billing.address.country %> <%= billing.address.zipCode %>
+          </p>
+        </div>
+        <% } %>
+
+        <div class="support-section">
+          <h3>Need Help?</h3>
+          <p>Our customer service team is here for you:</p>
+          <ul>
+            <li>Email: support@cyclestore.com</li>
+            <li>Phone: 1-800-CYCLE</li>
+            <li>Live Chat: Available 24/7 on our website</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer">
+        <p>
+          © <%= new Date().getFullYear() %> Cycle Store. All rights reserved.
+        </p>
+        <small
+          >This email confirms updates to your order. Please keep it for your
+          records.</small
+        >
+      </div>
+    </div>
+  </body>
+</html>

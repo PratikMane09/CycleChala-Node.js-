@@ -7,9 +7,21 @@ import { orderController } from "../controllers/orderController.js";
 import { cartController } from "../controllers/cartController.js";
 import { reviewController } from "../controllers/reviewController.js";
 import { productController } from "../controllers/productController.js";
+import { userController } from "../controllers/userController.js";
 
 const router = express.Router();
-
+router.get("/profile", auth, userController.getUserProfile);
+router.put("/profile/update", auth, userController.updateProfile);
+router.post(
+  "/profile/set-password/init",
+  auth,
+  userController.initiateSetPassword
+);
+router.post(
+  "/profile/set-password/verify",
+  auth,
+  userController.verifyAndSetPassword
+);
 // Get user's wishlist
 router.get("/wishlist", auth, WishlistController.getWishlist);
 
@@ -58,7 +70,7 @@ router.put("/cart/items/:productId", auth, cartController.updateCartItem);
 router.delete("/cart", auth, cartController.clearCart);
 
 // Order Routes
-router.post("/orders", auth, orderController.createOrder);
+router.post("/orders", auth, orderController.createOrUpdateOrder);
 router.get("/orders", auth, orderController.getOrders);
 router.get("/orders/:orderId", auth, orderController.getOrderById);
 router.post("/orders/:orderId/cancel", auth, orderController.cancelOrder);

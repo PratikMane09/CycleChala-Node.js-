@@ -91,7 +91,7 @@ router.delete("/categories/:id", adminOnly, categoryController.deleteCategory);
 
 // Admin Order Management Routes
 router.get("/orders", adminOnly, orderController.getOrders);
-router.get("/orders/:orderId", adminOnly, orderController.getOrderById);
+router.get("/orders/:orderId", adminOnly, orderController.getOrderDetails);
 router.put(
   "/orders/:orderId/status",
   adminOnly,

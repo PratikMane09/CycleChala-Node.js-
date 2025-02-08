@@ -111,6 +111,44 @@ class EmailService {
       return false;
     }
   }
+  async sendOrderUpdateNotification(to, data) {
+    try {
+      console.log("Sending order update notification with data:", data);
+
+      let updateMessage = "Your order details have been updated.";
+      if (data.updateType === "address_update") {
+        updateMessage =
+          "The shipping and/or billing address for your order has been updated.";
+      }
+
+      const templateData = {
+        name: data.name || "Valued Customer",
+        orderId: data.orderId,
+        updateMessage,
+        shipping: data.shipping,
+        billing: data.billing,
+        date: new Date().toLocaleDateString(),
+      };
+
+      const template = await ejs.renderFile(
+        path.join(process.cwd(), "views", "emails", "order-update.ejs"),
+        templateData
+      );
+
+      const mailOptions = {
+        from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_USER}>`,
+        to,
+        subject: `Order Update - #${data.orderId} - CycleChala Store`,
+        html: template,
+      };
+
+      await this.transporter.sendMail(mailOptions);
+      return true;
+    } catch (error) {
+      console.error("Error sending order update notification:", error);
+      return false;
+    }
+  }
   async sendWelcomeEmail(to, data) {
     try {
       const template = await ejs.renderFile(

@@ -7,40 +7,131 @@ import {
 } from "../services/email.service.js";
 import { emailService } from "../../config/mailer.js";
 import { User } from "../models/User.js";
+import mongoose from "mongoose";
 
-export const orderController = {
-  // Create new order
+const validateAddress = (address) => {
+  if (!address) throw new Error("Address is required");
 
-  async createOrder(req, res) {
-    try {
-      const { billingAddress, shippingAddress } = req.body;
+  const requiredFields = ["street", "city", "state", "country", "zipCode"];
+  for (const field of requiredFields) {
+    if (!address[field]) {
+      throw new Error(`${field} is required in address`);
+    }
+  }
+  return true;
+};
 
-      const cart = await Cart.findOne({ user: req.user._id }).populate(
-        "items.product"
-      );
-      const user = await User.findById(req.user._id); // Fixed user query
+// Helper functions outside the controller
+const sendOrderConfirmationEmail = async (user, order, cartItems) => {
+  const emailData = {
+    name: user.name,
+    orderId: order._id,
+    items: cartItems.map((item) => ({
+      name: item.product.name,
+      quantity: item.quantity,
+      price: item.price.finalPrice,
+    })),
+    summary: order.summary,
+    billing: {
+      name: order.billing.name,
+      address: order.billing.address,
+    },
+    shipping: {
+      address: order.shipping.address,
+      method: order.shipping.method,
+    },
+  };
+
+  try {
+    await emailService.sendOrderConfirmation(user.email, emailData);
+  } catch (error) {
+    console.error("Error sending order confirmation email:", error);
+  }
+};
+
+const sendOrderUpdateNotificationEmail = async (order) => {
+  const emailData = {
+    orderId: order._id,
+    billing: order.billing,
+    shipping: order.shipping,
+    updateType: "address_update",
+  };
+
+  try {
+    await emailService.sendOrderUpdateNotification(
+      order.billing.email,
+      emailData
+    );
+  } catch (error) {
+    console.error("Error sending order update notification:", error);
+  }
+};
+
+// Controller implementation with explicit function declarations
+const createNewOrder = async (req, res) => {
+  const { billingAddress, shippingAddress } = req.body;
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      const cart = await Cart.findOne({ user: req.user._id })
+        .populate("items.product")
+        .session(session);
+
+      const user = await User.findById(req.user._id).session(session);
 
       if (!cart || cart.items.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Cart is empty",
-        });
+        throw new Error("Cart is empty");
       }
 
-      // Validate product availability and prices
+      // Destructure and structure billing address
+      const { street, city, state, country, zipCode, name, email, phone } =
+        billingAddress;
+      const formattedBillingAddress = {
+        address: {
+          street,
+          city,
+          state,
+          country,
+          zipCode,
+        },
+        name,
+        email: email || user.email, // Fallback to user email if not provided
+        phone,
+      };
+
+      // Destructure and structure shipping address
+      const {
+        street: shipStreet,
+        city: shipCity,
+        state: shipState,
+        country: shipCountry,
+        zipCode: shipZipCode,
+      } = shippingAddress;
+
+      const formattedShippingAddress = {
+        address: {
+          street: shipStreet,
+          city: shipCity,
+          state: shipState,
+          country: shipCountry,
+          zipCode: shipZipCode,
+        },
+        method: shippingAddress.method || "standard",
+      };
+
+      // Validate product availability
       for (const item of cart.items) {
         if (
           !item.product.inventory.inStock ||
           item.quantity > item.product.inventory.quantity
         ) {
-          return res.status(400).json({
-            success: false,
-            message: `Product ${item.product.name} is not available in requested quantity`,
-          });
+          throw new Error(
+            `Product ${item.product.name} is not available in requested quantity`
+          );
         }
       }
 
-      // Create order items from cart
       const orderItems = cart.items.map((item) => ({
         product: item.product._id,
         quantity: item.quantity,
@@ -65,15 +156,8 @@ export const orderController = {
               .toUpperCase(),
           },
         },
-        billing: {
-          ...billingAddress,
-          email: user.email, // Use user.email instead of req.user.email
-          phone: billingAddress.phone, // Use user.phone instead of req.user.phone
-        },
-        shipping: {
-          ...shippingAddress,
-          method: "standard",
-        },
+        billing: formattedBillingAddress,
+        shipping: formattedShippingAddress,
         metadata: {
           source: req.headers["user-agent"] ? "website" : "mobile_app",
           ipAddress: req.ip,
@@ -83,80 +167,189 @@ export const orderController = {
 
       await order.calculateTotals();
 
-      // Validate order total against COD limits
       if (order.summary.total > 50000) {
-        return res.status(400).json({
-          success: false,
-          message: "Order total exceeds maximum limit for Cash on Delivery",
-        });
+        throw new Error(
+          "Order total exceeds maximum limit for Cash on Delivery"
+        );
       }
 
-      await order.save();
+      await order.save({ session });
 
       // Update product stock
       for (const item of cart.items) {
-        await item.product.updateStock(-item.quantity);
+        await item.product.updateStock(-item.quantity, session);
       }
 
-      // Clear cart after successful order
+      // Clear cart
       await cart.clear();
-      await cart.save();
+      await cart.save({ session });
 
-      const emailData = {
-        name: user.name,
-        orderId: order._id,
-        total: order.summary.subtotal,
-        shipping: order.summary.shipping,
-        items: cart.items.map((item) => ({
-          name: item.product.name,
-          quantity: item.quantity,
-          price: item.price.finalPrice,
-          // Add any other item details needed in the template
-        })),
-        summary: {
-          subtotal: order.summary.subtotal,
-          shipping: order.summary.shipping,
-          tax: order.summary.tax,
-          discount: order.summary.discount,
-          total: order.summary.total,
-        },
-        billing: {
-          name: order.billing.name,
-          address: order.billing.address,
-        },
-        shipping: {
-          address: order.shipping.address,
-          method: order.shipping.method,
-        },
-      };
+      // Send email confirmation
+      await sendOrderConfirmationEmail(user, order, cart.items);
 
-      try {
-        const emailSent = await emailService.sendOrderConfirmation(
-          user.email,
-          emailData
-        );
-        if (!emailSent) {
-          console.error("Failed to send order confirmation email");
-          // Log the failure but don't stop the order process
-        }
-      } catch (emailError) {
-        console.error("Error sending order confirmation email:", emailError);
-        // Log the error but don't stop the order process
-      }
-      res.json({
+      return res.json({
         success: true,
         message: "Order placed successfully",
         data: order,
       });
+    });
+  } catch (error) {
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
+const updateOrder = async (req, res) => {
+  const { billingAddress, shippingAddress, orderId } = req.body;
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findOne({
+        _id: orderId,
+        user: req.user._id,
+      })
+        .populate("items.product")
+        .session(session);
+
+      if (!order) {
+        throw new Error("Order not found");
+      }
+
+      if (!["pending", "confirmed"].includes(order.status)) {
+        throw new Error("Order cannot be updated in current status");
+      }
+
+      // Format billing address like in createOrder
+      if (billingAddress) {
+        const { street, city, state, country, zipCode, name, email, phone } =
+          billingAddress;
+        const formattedBillingAddress = {
+          address: {
+            street,
+            city,
+            state,
+            country,
+            zipCode,
+          },
+          name,
+          email: email || order.billing.email, // Fallback to existing email
+          phone,
+        };
+        order.billing = formattedBillingAddress;
+      }
+
+      // Format shipping address like in createOrder
+      if (shippingAddress) {
+        const {
+          street: shipStreet,
+          city: shipCity,
+          state: shipState,
+          country: shipCountry,
+          zipCode: shipZipCode,
+          method,
+        } = shippingAddress;
+
+        const formattedShippingAddress = {
+          address: {
+            street: shipStreet,
+            city: shipCity,
+            state: shipState,
+            country: shipCountry,
+            zipCode: shipZipCode,
+          },
+          method: method || order.shipping.method, // Fallback to existing method
+        };
+        order.shipping = formattedShippingAddress;
+      }
+
+      // Revalidate product availability if needed
+      for (const item of order.items) {
+        if (
+          !item.product.inventory.inStock ||
+          item.quantity > item.product.inventory.quantity
+        ) {
+          throw new Error(
+            `Product ${item.product.name} is not available in requested quantity`
+          );
+        }
+      }
+
+      // Recalculate totals
+      await order.calculateTotals();
+
+      // Validate COD limit like in createOrder
+      if (order.payment.method === "cod" && order.summary.total > 50000) {
+        throw new Error(
+          "Order total exceeds maximum limit for Cash on Delivery"
+        );
+      }
+
+      // Update metadata
+      order.metadata = {
+        ...order.metadata,
+        lastUpdated: new Date(),
+        updatedFrom: req.headers["user-agent"] ? "website" : "mobile_app",
+        updateIpAddress: req.ip,
+        updateUserAgent: req.headers["user-agent"],
+      };
+
+      await order.save({ session });
+
+      // Send email notification
+      await sendOrderUpdateNotificationEmail(
+        await User.findById(req.user._id),
+        order
+      );
+
+      return res.json({
+        success: true,
+        message: "Order updated successfully",
+        data: order,
+      });
+    });
+  } catch (error) {
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+export const orderController = {
+  // Create new order
+
+  async createOrUpdateOrder(req, res) {
+    try {
+      const { billingAddress, shippingAddress, orderId } = req.body;
+
+      // Validate addresses
+      try {
+        validateAddress(billingAddress);
+        validateAddress(shippingAddress);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      // If orderId exists, update existing order
+      if (orderId) {
+        return await updateOrder(req, res, orderId);
+      }
+
+      // Create new order
+      return await createNewOrder(req, res);
     } catch (error) {
-      console.error("Order creation error:", error);
-      res.status(500).json({
+      console.error("Order operation error:", error);
+      return res.status(500).json({
         success: false,
-        message: "Error creating order",
+        message: "Error processing order",
         error: error.message,
       });
     }
   },
+
   // Update order delivery status (delivery agent)
   async updateDeliveryStatus(req, res) {
     try {
@@ -514,7 +707,7 @@ export const orderController = {
         _id: orderId,
         user: req.user._id,
       })
-        .populate("items.product", "name images price description")
+        .populate("items.product", "name images price description metadata")
         .select("-payment.codDetails.verificationCode");
 
       if (!order) {
@@ -523,6 +716,7 @@ export const orderController = {
           message: "Order not found",
         });
       }
+      console.log("order", order);
 
       // Transform order data for response
       const orderDetails = {
@@ -536,6 +730,7 @@ export const orderController = {
                 name: item.product.name,
                 images: item.product.images,
                 description: item.product.description,
+                slug: item.product.metadata.slug || "",
               }
             : {
                 id: null,
