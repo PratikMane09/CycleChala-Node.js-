@@ -8,6 +8,7 @@ import { productController } from "../controllers/productController.js";
 import { orderController } from "../controllers/orderController.js";
 import { reviewController } from "../controllers/reviewController.js";
 import { adminController } from "../controllers/adminController.js";
+import { userController } from "../controllers/userController.js";
 // import { upload } from "../middleware/upload.js";
 const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();
@@ -52,6 +53,28 @@ const memoryCache = (duration) => {
     next();
   };
 };
+// user rouets
+// Get all users with pagination and filtering
+router.get("/users", adminOnly, userController.getAllUsers);
+
+// Get single user details
+router.get("/users/:userId", adminOnly, userController.getUserDetails);
+
+// Create new user
+router.post("/users", adminOnly, userController.createUser);
+
+// Update user
+router.put("/users/:userId", adminOnly, userController.updateUser);
+
+// Reset user password
+router.post(
+  "/users/:userId/reset-password",
+  adminOnly,
+  userController.resetUserPassword
+);
+
+// Delete user
+router.delete("/users/:userId", adminOnly, userController.deleteUser);
 
 // Product Routes
 router.get("/products", adminController.getAdminProducts);
@@ -91,7 +114,7 @@ router.delete("/categories/:id", adminOnly, categoryController.deleteCategory);
 
 // Admin Order Management Routes
 router.get("/orders", adminOnly, orderController.getOrders);
-router.get("/orders/:orderId", adminOnly, orderController.getOrderDetails);
+router.get("/orders/:orderId", adminOnly, orderController.getOrderDetailsAdmin);
 router.put(
   "/orders/:orderId/status",
   adminOnly,

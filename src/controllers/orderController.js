@@ -774,4 +774,85 @@ export const orderController = {
       });
     }
   },
+  async getOrderDetailsAdmin(req, res) {
+    try {
+      const { orderId } = req.params;
+
+      // Validate orderId is a valid ObjectId
+      if (!mongoose.isValidObjectId(orderId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid order ID format",
+        });
+      }
+
+      const order = await Order.findOne({
+        _id: orderId,
+      })
+        .populate("items.product", "name images price description metadata")
+        .select("-payment.codDetails.verificationCode");
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
+      }
+
+      // Transform order data for response
+      const orderDetails = {
+        orderId: order._id,
+        orderDate: order.createdAt,
+        status: order.status,
+        items: order.items.map((item) => ({
+          product: item.product
+            ? {
+                id: item.product._id,
+                name: item.product.name,
+                images: item.product.images,
+                description: item.product.description,
+                slug: item.product.metadata.slug || "",
+              }
+            : {
+                id: null,
+                name: "Product Not Found",
+                images: [],
+                description: "",
+              },
+          quantity: item.quantity,
+          price: item.price,
+          specifications: item.specifications,
+        })),
+        summary: order.summary,
+        billing: {
+          name: order.billing.name,
+          address: order.billing.address,
+          phone: order.billing.phone,
+        },
+        shipping: {
+          address: order.shipping.address,
+          method: order.shipping.method,
+          trackingNumber: order.shipping.trackingNumber,
+          estimatedDelivery: order.shipping.estimatedDelivery,
+          deliveryAttempts: order.shipping.deliveryAttempts,
+        },
+        payment: {
+          method: order.payment.method,
+          status: order.payment.status,
+        },
+      };
+
+      return res.json({
+        success: true,
+        data: orderDetails,
+      });
+    } catch (error) {
+      console.error("Error fetching order details:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching order details",
+        error: error.message,
+      });
+    }
+  },
 };
