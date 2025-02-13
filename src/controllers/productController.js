@@ -55,18 +55,66 @@ export const productController = {
       }).select(`
         name brand description price specifications 
         features inventory.inStock rating warranty 
-        additionalInfo metadata images.data 
-        images.contentType images.alt
+        additionalInfo metadata images
       `);
 
       if (!product) {
         throw createError(404, "Product not found");
       }
 
+      // Process colors and images to create a unified color representation
+      const processedColors = [];
+      const colorMap = new Map();
+
+      // First, add colors from specifications
+      if (product.specifications?.colors?.available) {
+        product.specifications.colors.available.forEach((color) => {
+          colorMap.set(color?.name?.toLowerCase(), {
+            name: color.name,
+            hexCode: color.hexCode,
+            images: [],
+          });
+        });
+      }
+
+      // Then, process images and map them to colors
+      if (product.images && product.images.length > 0) {
+        product.images.forEach((image) => {
+          if (image.color) {
+            const colorKey = image.color?.name?.toLowerCase();
+
+            if (!colorMap.has(colorKey)) {
+              colorMap.set(colorKey, {
+                name: image.color.name,
+                hexCode: image.color.hexCode,
+                images: [],
+              });
+            }
+
+            colorMap.get(colorKey).images.push({
+              data: image.data,
+              contentType: image.contentType,
+              alt: image.alt || `${product.name} in ${image.color.name}`,
+              isPrimary: image.isPrimary || false,
+            });
+          }
+        });
+      }
+
+      // Convert the map to an array and sort by primary images
+      const availableColors = Array.from(colorMap.values())
+        .filter((color) => color.images.length > 0)
+        .map((color) => ({
+          ...color,
+          primaryImage:
+            color.images.find((img) => img.isPrimary) || color.images[0],
+        }));
+
       const response = {
         success: true,
         data: {
           ...product.toJSON(),
+          colors: availableColors,
           breadcrumb: [
             { name: "Home", path: "/" },
             {
@@ -144,16 +192,37 @@ export const productController = {
         wheelSize,
         suspension,
 
+        // New color filters
+        color, // Add color filter parameter
+        imageColor, // Add image color filter parameter
+
         // Sorting and pagination
         sort = "createdAt",
         order = "desc",
         page = 1,
-        limit = 24, // Increased default limit
+        limit = 24,
 
         // Additional options
         includeOutOfStock = false,
-        includeCategoryInfo = true, // Changed to true by default
+        includeCategoryInfo = true,
       } = req.query;
+
+      // Add color filters
+      if (color) {
+        query["specifications.colors.available"] = {
+          $elemMatch: {
+            name: { $regex: color, $options: "i" },
+          },
+        };
+      }
+
+      if (imageColor) {
+        query["images"] = {
+          $elemMatch: {
+            "color.name": { $regex: imageColor, $options: "i" },
+          },
+        };
+      }
 
       // Build the base query
       const query = {
@@ -211,34 +280,29 @@ export const productController = {
         }
       };
 
-      // Apply filters if present
       if (categoryType) await applyCategoryFilter("categoryType", categoryType);
       if (ageGroup) await applyCategoryFilter("ageGroup", ageGroup);
       if (gender) await applyCategoryFilter("gender", gender);
       if (professionalLevel)
         await applyCategoryFilter("professionalLevel", professionalLevel);
 
-      // Price range filter
       if (minPrice || maxPrice) {
         query["price.base"] = {};
         if (minPrice) query["price.base"].$gte = Number(minPrice);
         if (maxPrice) query["price.base"].$lte = Number(maxPrice);
       }
 
-      // Additional filters
       if (brand) query.brand = { $in: Array.isArray(brand) ? brand : [brand] };
       if (frameMaterial) query["specifications.frame.material"] = frameMaterial;
       if (wheelSize) query["specifications.wheels.size"] = wheelSize;
       if (suspension) query["specifications.suspension.type"] = suspension;
 
-      // Stock status handling
       if (!includeOutOfStock) {
         query["inventory.inStock"] = true;
       } else if (inStock === "true" || inStock === "false") {
         query["inventory.inStock"] = inStock === "true";
       }
 
-      // Search functionality
       if (search) {
         query.$or = [
           { name: { $regex: search, $options: "i" } },
@@ -247,7 +311,6 @@ export const productController = {
         ];
       }
 
-      // Sorting configuration
       const sortOptions = {};
       const validSortFields = {
         createdAt: { "metadata.createdAt": -1 },
@@ -259,12 +322,10 @@ export const productController = {
       sortOptions[validSortFields[sort] ? sort : "createdAt"] =
         order === "desc" ? -1 : 1;
 
-      // Pagination
       const pageNum = parseInt(page) || 1;
       const pageLimit = parseInt(limit) || 24;
       const skip = (pageNum - 1) * pageLimit;
 
-      // Select fields
       const selectFields = {
         name: 1,
         brand: 1,
@@ -272,6 +333,7 @@ export const productController = {
         description: 1,
         "specifications.frame.material": 1,
         "specifications.wheels.size": 1,
+        "specifications.colors": 1, // Added colors to selected fields
         "inventory.inStock": 1,
         rating: 1,
         "metadata.slug": 1,
@@ -279,7 +341,6 @@ export const productController = {
         ...(includeCategoryInfo ? { category: 1 } : {}),
       };
 
-      // Execute main query
       const [products, total] = await Promise.all([
         Product.find(query)
           .select(selectFields)
@@ -298,7 +359,6 @@ export const productController = {
         Product.countDocuments(query),
       ]);
 
-      // Prepare response
       return res.json({
         success: true,
         data: {
@@ -322,73 +382,87 @@ export const productController = {
   },
   async createProduct(req, res) {
     try {
-      // Ensure req.body.data exists and is a string
       if (!req.body.data) {
-        throw new Error("Product data is required");
+        return res.status(400).json({ error: "Product data is required" });
       }
 
-      // Parse the JSON data
       let productData;
       try {
         productData = JSON.parse(req.body.data);
       } catch (parseError) {
-        console.error("JSON parsing error:", parseError);
-        throw new Error("Invalid product data format");
+        return res.status(400).json({ error: "Invalid product data format" });
       }
 
-      // Process images if they exist
+      // Validate required fields
+      if (!productData.name || !productData.category) {
+        return res
+          .status(400)
+          .json({ error: "Name and category are required" });
+      }
+
+      // Parse image metadata once
+      let allImageMetadata = [];
+      try {
+        allImageMetadata = JSON.parse(req.body.imageMetadata || "[]");
+      } catch (e) {
+        console.warn("Failed to parse image metadata:", e);
+        allImageMetadata = [];
+      }
+
+      // Process images with enhanced metadata handling
       const processedImages = req.files?.length
         ? await Promise.all(
             req.files.map(async (file, index) => {
               const processed = await processImage(file.buffer);
 
-              // Safely parse image metadata
-              let metadata = { isPrimary: false, filename: file.originalname };
-              try {
-                if (req.body[`imageMetadata[${index}]`]) {
-                  metadata = JSON.parse(req.body[`imageMetadata[${index}]`]);
-                }
-              } catch (e) {
-                console.warn(`Failed to parse metadata for image ${index}`);
-              }
-
+              // Get metadata for this specific image
+              const metadata = allImageMetadata[index] || {};
+              console.log("color", metadata.color);
               return {
                 data: processed,
                 contentType: "image/webp",
-                filename: metadata.filename,
+                filename: metadata.filename || file.originalname,
                 size: processed.length,
-                isPrimary: metadata.isPrimary,
-                alt: metadata.alt || "",
+                isPrimary: metadata.isPrimary || false,
+                alt: metadata.alt || `${productData.name} - Image ${index + 1}`,
+                color: metadata.color || null, // This will now properly capture the color data
               };
             })
           )
         : [];
 
-      // Create new product with the parsed data
-      const product = new Product({
+      // Rest of your code remains the same...
+      const enrichedProductData = {
         ...productData,
         images: processedImages,
-      });
+        metadata: {
+          ...productData.metadata,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          isPublished: productData.metadata?.isPublished ?? false,
+        },
+      };
 
-      // Validate the product before saving
-      const validationError = product.validateSync();
-      if (validationError) {
-        throw validationError;
-      }
-
+      const product = new Product(enrichedProductData);
+      await product.validate();
       await product.save();
-      res.status(201).json(product);
+
+      res.status(201).json({
+        message: "Product created successfully",
+        product: {
+          _id: product._id,
+          name: product.name,
+          slug: product.metadata.slug,
+        },
+      });
     } catch (error) {
       console.error("Product creation error:", error);
-      res.status(400).json({
-        error: error.message,
-        details: error.errors
-          ? Object.values(error.errors).map((e) => e.message)
-          : undefined,
+      res.status(500).json({
+        error: "Internal server error",
+        message: error.message,
       });
     }
   },
-
   async updateProduct(req, res) {
     try {
       // Find the existing product
@@ -397,77 +471,97 @@ export const productController = {
         return res.status(404).json({ error: "Product not found" });
       }
 
-      // Parse product data if it exists
-      let productData = {};
+      // Parse and validate product data
+      let productData;
       if (req.body.data) {
         try {
           productData = JSON.parse(req.body.data);
-          // Remove images from productData to handle them separately
-          delete productData.images;
         } catch (parseError) {
-          console.error("JSON parsing error:", parseError);
-          throw new Error("Invalid product data format");
+          return res.status(400).json({ error: "Invalid product data format" });
         }
       }
 
-      // Debug log to check files
-      console.log("Received files:", req.files);
+      // Parse image metadata once
+      let allImageMetadata = [];
+      try {
+        allImageMetadata = JSON.parse(req.body.imageMetadata || "[]");
+      } catch (e) {
+        console.warn("Failed to parse image metadata:", e);
+        allImageMetadata = [];
+      }
 
       // Process new images if they exist
-      if (req.files && req.files.length > 0) {
-        const processedImages = await Promise.all(
+      let processedImages = [];
+      if (req.files?.length) {
+        processedImages = await Promise.all(
           req.files.map(async (file, index) => {
-            console.log("Processing file:", file.originalname); // Debug log
             const processed = await processImage(file.buffer);
 
-            // Safely parse image metadata
-            let metadata = { isPrimary: false, filename: file.originalname };
-            try {
-              if (req.body[`imageMetadata[${index}]`]) {
-                metadata = JSON.parse(req.body[`imageMetadata[${index}]`]);
-              }
-            } catch (e) {
-              console.warn(`Failed to parse metadata for image ${index}`);
-            }
+            // Get metadata for this specific image
+            const metadata = allImageMetadata[index] || {};
 
             return {
               data: processed,
               contentType: "image/webp",
-              filename: metadata.filename,
+              filename: metadata.filename || file.originalname,
               size: processed.length,
-              isPrimary: metadata.isPrimary,
-              alt: metadata.alt || "",
+              isPrimary: metadata.isPrimary || false,
+              alt:
+                metadata.alt ||
+                `${productData.name || product.name} - Image ${index + 1}`,
+              color: metadata.color || null,
             };
           })
         );
-
-        // Handle image updates
-        if (productData.keepExistingImages) {
-          product.images = [...product.images, ...processedImages];
-        } else {
-          product.images = processedImages;
-        }
       }
 
-      // Update other product fields
-      Object.assign(product, productData);
+      // Handle image updates based on keepExistingImages flag
+      if (productData?.keepExistingImages) {
+        productData.images = [...(product.images || []), ...processedImages];
+      } else if (processedImages.length > 0) {
+        productData.images = processedImages;
+      }
+      // If no new images and keepExistingImages is false, images will be cleared
+
+      // Prepare the update data
+      const enrichedProductData = {
+        ...productData,
+        metadata: {
+          ...(product.metadata || {}),
+          ...(productData?.metadata || {}),
+          updatedAt: new Date(),
+        },
+      };
+
+      // Update the product with the new data
+      Object.assign(product, enrichedProductData);
 
       // Validate the updated product
-      const validationError = product.validateSync();
-      if (validationError) {
-        throw validationError;
-      }
+      await product.validate();
 
-      // Save and return the updated product
+      // Save the updated product
       await product.save();
-      res.json(product);
+
+      // Return success response
+      res.json({
+        message: "Product updated successfully",
+        product: {
+          _id: product._id,
+          name: product.name,
+          slug: product.metadata.slug,
+        },
+      });
     } catch (error) {
       console.error("Product update error:", error);
-      res.status(400).json({
-        error: error.message,
-        details: error.errors
-          ? Object.values(error.errors).map((e) => e.message)
-          : undefined,
+      if (error.name === "ValidationError") {
+        return res.status(400).json({
+          error: "Validation error",
+          details: Object.values(error.errors).map((err) => err.message),
+        });
+      }
+      res.status(500).json({
+        error: "Internal server error",
+        message: error.message,
       });
     }
   },

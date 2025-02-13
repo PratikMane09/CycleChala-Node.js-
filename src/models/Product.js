@@ -42,6 +42,18 @@ const productSchema = new mongoose.Schema(
       },
     },
     specifications: {
+      colors: {
+        available: [
+          {
+            name: { type: String, required: true },
+            hexCode: { type: String, required: true },
+          },
+        ],
+        // primary: {
+        //   name: { type: String },
+        //   hexCode: { type: String },
+        // },
+      },
       frame: {
         material: { type: String },
         size: { type: String },
@@ -73,6 +85,10 @@ const productSchema = new mongoose.Schema(
     features: [String],
     images: [
       {
+        color: {
+          name: String,
+          hexCode: String,
+        },
         data: {
           type: Buffer,
           required: true,

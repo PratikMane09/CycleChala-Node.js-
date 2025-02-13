@@ -33,12 +33,13 @@ app.use(
     origin:
       process.env.FRONTEND_URL ||
       "http://localhost:3000" ||
-      "https://www.cyclechala.in",
-
+      "https://www.cyclechala.in" ||
+      "https://cyclechala-node-js.onrender.com",
     credentials: true,
   })
 );
-
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

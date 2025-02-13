@@ -10,7 +10,12 @@ import { reviewController } from "../controllers/reviewController.js";
 import { adminController } from "../controllers/adminController.js";
 import { userController } from "../controllers/userController.js";
 // import { upload } from "../middleware/upload.js";
-const upload = multer({ storage: multer.memoryStorage() });
+
+const upload = multer({
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 const router = express.Router();
 const adminOnly = [auth, checkRole(["admin"])];
 // Cache Middleware

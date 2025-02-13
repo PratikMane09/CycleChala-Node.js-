@@ -1,11 +1,9 @@
 import sharp from "sharp";
-
 export const processImage = async (buffer) => {
-  return sharp(buffer)
-    .webp({ quality: 80 })
-    .resize(1024, 1024, {
-      fit: "inside",
-      withoutEnlargement: true,
-    })
+  // Add image compression/optimization logic
+  const processedBuffer = await sharp(buffer)
+    .webp({ quality: 80 }) // Compress and convert to WebP
+    .resize(1920, 1920, { fit: "inside", withoutEnlargement: true })
     .toBuffer();
+  return processedBuffer;
 };
