@@ -147,6 +147,34 @@ const productSchema = new mongoose.Schema(
       maintenance: [String],
       includedAccessories: [String],
     },
+    displaySettings: {
+      homepage: {
+        isDisplayed: {
+          type: Boolean,
+          default: false,
+        },
+        priority: {
+          type: Number,
+          min: 0,
+          max: 100,
+          default: 0,
+        },
+        section: {
+          type: String,
+          enum: ["featured", "bestseller", "new", "trending", "special"],
+          required: function () {
+            return this.displaySettings.homepage.isDisplayed;
+          },
+        },
+        startDate: {
+          type: Date,
+          default: Date.now,
+        },
+        endDate: {
+          type: Date,
+        },
+      },
+    },
     metadata: {
       isPublished: {
         type: Boolean,
@@ -171,6 +199,42 @@ const productSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+productSchema.statics.getHomepageProducts = async function (options = {}) {
+  const { section, limit = 10, active = true } = options;
+
+  const currentDate = new Date();
+
+  const query = {
+    "displaySettings.homepage.isDisplayed": true,
+    "metadata.isPublished": true,
+    "inventory.inStock": true,
+  };
+
+  if (active) {
+    query["displaySettings.homepage.startDate"] = { $lte: currentDate };
+    query["$or"] = [
+      { "displaySettings.homepage.endDate": { $gt: currentDate } },
+      { "displaySettings.homepage.endDate": null },
+    ];
+  }
+
+  if (section) {
+    query["displaySettings.homepage.section"] = section;
+  }
+
+  return this.find(query)
+    .sort({
+      "displaySettings.homepage.priority": -1,
+      "rating.average": -1,
+      "metadata.createdAt": -1,
+    })
+    .limit(limit).select(`
+      name brand price description
+      displaySettings.homepage
+      inventory.inStock rating
+      metadata.slug images
+    `);
+};
 productSchema.methods.updateStock = async function (quantityChange) {
   const currentQuantity = this.inventory.quantity;
   const newQuantity = currentQuantity + quantityChange;

@@ -4,7 +4,10 @@ import { checkRole } from "../middleware/roleCheck.js";
 // import { adminController } from "../controllers/adminController.js";
 import multer from "multer";
 import { categoryController } from "../controllers/categoryController.js";
-import { productController } from "../controllers/productController.js";
+import {
+  homepageController,
+  productController,
+} from "../controllers/productController.js";
 import { orderController } from "../controllers/orderController.js";
 import { reviewController } from "../controllers/reviewController.js";
 import { adminController } from "../controllers/adminController.js";
@@ -134,5 +137,16 @@ router.put(
   reviewController.updateReviewStatus
 );
 router.delete("/reviews/:reviewId", adminOnly, reviewController.deleteReview);
+// homepage boolean
+router.post(
+  "/products/:productId/homepage",
+  adminOnly,
+  homepageController.updateHomepageSettings
+);
+router.get(
+  "/homepage/products",
+  adminOnly,
+  homepageController.getHomepageProducts
+);
 
 export default router;

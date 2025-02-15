@@ -578,3 +578,70 @@ export const productController = {
     }
   },
 };
+
+export const homepageController = {
+  async updateHomepageSettings(req, res) {
+    try {
+      const { productId } = req.params;
+      const { isDisplayed, priority, section, startDate, endDate } = req.body;
+
+      const product = await Product.findById(productId);
+
+      if (!product) {
+        throw createError(404, "Product not found");
+      }
+
+      // Update homepage display settings
+      product.displaySettings = {
+        homepage: {
+          isDisplayed,
+          priority: Math.min(Math.max(priority, 0), 100),
+          section,
+          startDate: startDate || new Date(),
+          endDate: endDate || null,
+        },
+      };
+
+      await product.save();
+
+      return res.json({
+        success: true,
+        message: "Homepage display settings updated successfully",
+        data: product.displaySettings,
+      });
+    } catch (error) {
+      console.error("Homepage Settings Update Error:", error);
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || "Internal server error",
+      });
+    }
+  },
+
+  async getHomepageProducts(req, res) {
+    try {
+      const sections = ["featured", "bestseller", "new", "trending", "special"];
+      const products = {};
+
+      await Promise.all(
+        sections.map(async (section) => {
+          products[section] = await Product.getHomepageProducts({
+            section,
+            limit: section === "featured" ? 6 : 8,
+          });
+        })
+      );
+
+      return res.json({
+        success: true,
+        data: products,
+      });
+    } catch (error) {
+      console.error("Homepage Products Error:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to fetch homepage products",
+      });
+    }
+  },
+};
