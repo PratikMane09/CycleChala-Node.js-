@@ -471,61 +471,66 @@ export const productController = {
         return res.status(404).json({ error: "Product not found" });
       }
 
-      // Parse and validate product data
-      let productData;
-      if (req.body.data) {
-        try {
-          productData = JSON.parse(req.body.data);
-        } catch (parseError) {
-          return res.status(400).json({ error: "Invalid product data format" });
-        }
-      }
+      // Parse the incoming data
+      const productData = JSON.parse(req.body.data);
+      const imageMetadata = JSON.parse(req.body.imageMetadata || "[]");
 
-      // Parse image metadata once
-      let allImageMetadata = [];
-      try {
-        allImageMetadata = JSON.parse(req.body.imageMetadata || "[]");
-      } catch (e) {
-        console.warn("Failed to parse image metadata:", e);
-        allImageMetadata = [];
+      // Handle existing images
+      if (productData.imageUpdates?.existingImages) {
+        // Update existing images with new metadata (colors, isPrimary, etc.)
+        product.images = product.images
+          .map((existingImage) => {
+            const updateData = productData.imageUpdates.existingImages.find(
+              (update) => update._id.toString() === existingImage._id.toString()
+            );
+
+            if (!updateData) {
+              return null; // Image to be deleted
+            }
+
+            return {
+              ...existingImage,
+              color: updateData.color,
+              isPrimary: updateData.isPrimary,
+              alt: updateData.alt,
+            };
+          })
+          .filter(Boolean); // Remove null entries (deleted images)
       }
 
       // Process new images if they exist
-      let processedImages = [];
       if (req.files?.length) {
-        processedImages = await Promise.all(
+        const processedImages = await Promise.all(
           req.files.map(async (file, index) => {
             const processed = await processImage(file.buffer);
-
-            // Get metadata for this specific image
-            const metadata = allImageMetadata[index] || {};
+            const metadata = imageMetadata[index] || {};
 
             return {
               data: processed,
               contentType: "image/webp",
-              filename: metadata.filename || file.originalname,
+              filename: metadata.filename,
               size: processed.length,
-              isPrimary: metadata.isPrimary || false,
-              alt:
-                metadata.alt ||
-                `${productData.name || product.name} - Image ${index + 1}`,
-              color: metadata.color || null,
+              isPrimary: metadata.isPrimary,
+              alt: metadata.alt,
+              color: metadata.color,
             };
           })
         );
+
+        // Combine with existing images
+        product.images = [...product.images, ...processedImages];
       }
 
-      // Handle image updates based on keepExistingImages flag
-      if (productData?.keepExistingImages) {
-        productData.images = [...(product.images || []), ...processedImages];
-      } else if (processedImages.length > 0) {
-        productData.images = processedImages;
+      // Ensure exactly one primary image
+      const hasPrimary = product.images.some((img) => img.isPrimary);
+      if (!hasPrimary && product.images.length > 0) {
+        product.images[0].isPrimary = true;
       }
-      // If no new images and keepExistingImages is false, images will be cleared
 
-      // Prepare the update data
+      // Update other product data
       const enrichedProductData = {
         ...productData,
+        images: product.images,
         metadata: {
           ...(product.metadata || {}),
           ...(productData?.metadata || {}),
@@ -533,16 +538,14 @@ export const productController = {
         },
       };
 
-      // Update the product with the new data
+      // Remove imageUpdates from final data
+      delete enrichedProductData.imageUpdates;
+
+      // Update and save the product
       Object.assign(product, enrichedProductData);
-
-      // Validate the updated product
       await product.validate();
-
-      // Save the updated product
       await product.save();
 
-      // Return success response
       res.json({
         message: "Product updated successfully",
         product: {
@@ -559,10 +562,9 @@ export const productController = {
           details: Object.values(error.errors).map((err) => err.message),
         });
       }
-      res.status(500).json({
-        error: "Internal server error",
-        message: error.message,
-      });
+      res
+        .status(500)
+        .json({ error: "Internal server error", message: error.message });
     }
   },
 

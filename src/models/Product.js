@@ -49,10 +49,10 @@ const productSchema = new mongoose.Schema(
             hexCode: { type: String, required: true },
           },
         ],
-        // primary: {
-        //   name: { type: String },
-        //   hexCode: { type: String },
-        // },
+        primary: {
+          name: { type: String },
+          hexCode: { type: String },
+        },
       },
       frame: {
         material: { type: String },
